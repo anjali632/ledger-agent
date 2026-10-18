@@ -324,16 +324,23 @@ def answer(q):
 
     # metric
     by_units = re.search(r"\b(units?|quantity|quantities|qty|pieces|items)\b", ql)
-    by_count = re.search(r"\b(how many|number of|count|most orders|fewest orders|frequent|most often)\b", ql) and not by_units
-    want_avg = re.search(r"\b(average|avg|mean)\b", ql)
+    # "how many (US) dollars ..." asks for money, not a count
+    money_words = re.search(r"\bhow (many|much) (us |u\.s\. |american )?(dollars?|usd|bucks)\b|\$|\bworth\b|\bvalue\b", ql)
+    by_count = re.search(r"\b(how many|number of|count|most orders|fewest orders|frequent|most often)\b", ql) \
+        and not by_units and not money_words
+    want_avg = re.search(r"\b(average|avg|mean|typical)\b", ql)
 
     def metric(rs):
+        if want_avg:
+            if not rs:
+                return 0
+            if by_units:
+                return round(sum(int(o["qty"]) for o in rs) / len(rs), 2)
+            return money(sum(o["usd"] for o in rs) / len(rs))
         if by_units:
             return sum(int(o["qty"]) for o in rs)
         if by_count:
             return len(rs)
-        if want_avg:
-            return money(sum(o["usd"] for o in rs) / len(rs)) if rs else 0
         return money(sum(o["usd"] for o in rs))
 
     # group-by questions: which product/region/customer/month is top/bottom
