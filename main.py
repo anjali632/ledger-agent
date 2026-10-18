@@ -335,20 +335,28 @@ def answer(q):
 
     # group-by questions: which product/region/customer/month is top/bottom
     group = None
-    if re.search(r"\b(which|what|top|best|worst|highest|lowest|most|least|largest|smallest|biggest|leading)\b", ql):
-        if re.search(r"\b(which|what|top|best|worst|leading)\s+(\w+\s+){0,2}(products?|items?|appliances?)\b", ql) \
-                or re.search(r"\b(products?|appliances?)\s+(had|has|was|generated|brought|earned|made|sold|with)\b", ql):
-            group = "product"
-        elif re.search(r"\b(which|what|top|best|worst|leading)\s+(\w+\s+){0,2}regions?\b", ql) \
-                or re.search(r"\bregions?\s+(had|has|was|generated|brought|earned|made|sold|with)\b", ql):
-            group = "region"
-        elif re.search(r"\b(which|what|top|best|worst|leading)\s+(\w+\s+){0,2}(customers?|clients?|buyers?)\b", ql) \
-                or re.search(r"\b(customers?|clients?|buyers?)\s+(had|has|was|generated|brought|spent|made|bought|with|placed)\b", ql):
-            group = "customer"
-        elif re.search(r"\b(which|what)\s+(\w+\s+){0,2}(months?)\b", ql):
-            group = "month"
-        elif re.search(r"\b(which|what)\s+(\w+\s+){0,2}(currency|currencies)\b", ql):
-            group = "currency"
+    qn = _norm(q)
+    superlative = re.search(r"\b(top|best|worst|highest|lowest|most|least|largest|smallest|biggest|leading|"
+                            r"greatest|fewest|maximum|minimum|max|min|grossing|bottom)\b", qn)
+    if superlative or re.search(r"^(which|what) (product|region|customer|client|month|currency)\b", qn):
+        dims = [("product", r"products?|items?|appliances?|skus?|models?"),
+                ("region", r"regions?|areas?|territor(?:y|ies)|zones?"),
+                ("customer", r"customers?|clients?|buyers?|accounts?|shoppers?"),
+                ("month", r"months?"),
+                ("currency", r"currenc(?:y|ies)")]
+        filter_words = {_norm(x) for x in regions + products} | {c.lower() for c in customers}
+        cands = []
+        for name, pat in dims:
+            for mm in re.finditer(rf"\b({pat})\b", qn):
+                prev = qn[:mm.start()].split()
+                prev2 = " ".join(prev[-2:])
+                if (prev and prev[-1] in filter_words) or prev2 in filter_words:
+                    continue  # e.g. "North region", "Air Fryer product" = a filter, not the thing asked
+                if prev and prev[-1] in ("per", "each", "every", "this", "that", "same") and name == "month":
+                    continue
+                cands.append((mm.start(), name))
+        if cands:
+            group = min(cands)[1]
     if group:
         key = {"product": lambda o: o["product"], "region": lambda o: o["region"],
                "customer": lambda o: o["customer"], "currency": lambda o: o["currency"],
@@ -388,9 +396,7 @@ def _startup():
 
 
 @app.post("/")
-@app.post("/ask")
-@app.post("/answer")
-@app.post("/query")
+@app.post("/{path:path}")
 async def ask(request: Request):
     try:
         body = await request.json()
