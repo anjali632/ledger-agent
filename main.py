@@ -280,6 +280,9 @@ def answer(q):
     customers = sorted({o["customer"] for o in orders})
     ql = q.lower()
     f = parse_question(q, products, regions, customers)
+    # 'at least' / 'at most' are not superlatives ("customers with at least one order")
+    ql = re.sub(r"\bat (least|most)\b", " ", ql)
+    counting = re.search(r"^\s*(how many|how much|what is the (total )?(number|count|sum)|what was the (total )?(number|count|sum)|count|number of|total)\b", ql)
 
     # which status set?
     refund_words = re.search(r"refund", ql)
@@ -335,10 +338,10 @@ def answer(q):
 
     # group-by questions: which product/region/customer/month is top/bottom
     group = None
-    qn = _norm(q)
+    qn = _norm(ql)
     superlative = re.search(r"\b(top|best|worst|highest|lowest|most|least|largest|smallest|biggest|leading|"
                             r"greatest|fewest|maximum|minimum|max|min|grossing|bottom)\b", qn)
-    if superlative or re.search(r"^(which|what) (product|region|customer|client|month|currency)\b", qn):
+    if not counting and (superlative or re.search(r"^(which|what) (product|region|customer|client|month|currency)\b", qn)):
         dims = [("product", r"products?|items?|appliances?|skus?|models?"),
                 ("region", r"regions?|areas?|territor(?:y|ies)|zones?"),
                 ("customer", r"customers?|clients?|buyers?|accounts?|shoppers?"),
